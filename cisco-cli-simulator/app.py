@@ -83,10 +83,18 @@ def start():
  return jsonify(state=s,prompt=prompt(s))
 @app.post("/api/cmd")
 def cmd():
- s=session["s"];s["commands"]+=1;o=exec_cmd(request.json.get("command",""),s);session["s"]=s;score=max(100,1000-s["commands"]*10-s["hints"]*150)
+ s=copy.deepcopy(session["s"])
+ s["commands"]+=1
+ o=exec_cmd(request.json.get("command",""),s)
+ # Flask's signed-cookie session does not reliably notice nested dict mutations.
+ # Store a fresh object so configuration changes persist across requests.
+ session["s"]=copy.deepcopy(s)
+ session.modified=True
+ score=max(100,1000-s["commands"]*10-s["hints"]*150)
  return jsonify(output=o,prompt=prompt(s),solved=solved(s),score=score)
 @app.post("/api/hint")
 def hint():
- s=session["s"];s["hints"]+=1;k=s["kind"];hs={"if":["インターフェース状態を見てみよ。","administratively down に注目。","Gi0/1 の shutdown を解除。"],"gw":["端末自身のIP設定を確認。","Default Gatewayがおかしくない？","正しいGWは192.168.10.1。"],"vlan":["VLAN membershipを確認。","Fa0/3の所属VLANに注目。","経理はVLAN 20。"],"trunk":["スイッチ間リンクを確認。","Gi0/24がtrunkingしてへん。","switchport mode trunk。"],"route":["ルーティングテーブルを確認。","10.30.0.0/24が無い。","next-hopは10.0.12.2。"],"ospf":["OSPF neighborを確認。","R1のOSPF network文を確認。","10.0.12.0/30をarea 0へ。"],"dns":["IP設定と名前解決を分けて考えよ。","DNSサーバー設定を確認。","正しいDNSは192.168.10.53。"],"acl":["ICMPは通る＝経路自体はありそう。","ACLを確認。","192.168.50.10→10.20.0.10 TCP/443をpermit。"],"dhcp":["DHCP poolを確認。","pool自体が無い。","LAN poolを作りnetworkとdefault-routerを設定。"],"double":["1個直して終わりとは限らんで。","Gi0/1とrouting両方を見る。","no shut後、10.30.0.0/24のstatic routeも必要。"]}[k]
+ s=copy.deepcopy(session["s"]);s["hints"]+=1;k=s["kind"];hs={"if":["インターフェース状態を見てみよ。","administratively down に注目。","Gi0/1 の shutdown を解除。"],"gw":["端末自身のIP設定を確認。","Default Gatewayがおかしくない？","正しいGWは192.168.10.1。"],"vlan":["VLAN membershipを確認。","Fa0/3の所属VLANに注目。","経理はVLAN 20。"],"trunk":["スイッチ間リンクを確認。","Gi0/24がtrunkingしてへん。","switchport mode trunk。"],"route":["ルーティングテーブルを確認。","10.30.0.0/24が無い。","next-hopは10.0.12.2。"],"ospf":["OSPF neighborを確認。","R1のOSPF network文を確認。","10.0.12.0/30をarea 0へ。"],"dns":["IP設定と名前解決を分けて考えよ。","DNSサーバー設定を確認。","正しいDNSは192.168.10.53。"],"acl":["ICMPは通る＝経路自体はありそう。","ACLを確認。","192.168.50.10→10.20.0.10 TCP/443をpermit。"],"dhcp":["DHCP poolを確認。","pool自体が無い。","LAN poolを作りnetworkとdefault-routerを設定。"],"double":["1個直して終わりとは限らんで。","Gi0/1とrouting両方を見る。","no shut後、10.30.0.0/24のstatic routeも必要。"]}[k]
+ session["s"]=copy.deepcopy(s);session.modified=True
  return jsonify(hint=hs[min(s["hints"]-1,len(hs)-1)])
 if __name__=="__main__":app.run(host="0.0.0.0",port=int(os.environ.get("PORT",5000)))
