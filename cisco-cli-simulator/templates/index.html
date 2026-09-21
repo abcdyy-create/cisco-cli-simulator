@@ -1,1 +1,15 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NETOPS</title><link rel="stylesheet" href="/static/style.css"></head><body><div class="app"><header><b>NETOPS // INCIDENT SIMULATOR</b><span>LAB ONLINE</span></header><div class="layout"><aside><div class="label">INCIDENT QUEUE</div><div id="missions"></div></aside><main><div class="top"><div><small id="ticket"></small><h1 id="title"></h1><p id="brief"></p></div><div class="score">SCORE <b id="score">1000</b></div></div><div class="topology"><span>CLIENT</span><i></i><span>SW1</span><i></i><span id="device">R1</span><i id="fault"></i><span>REMOTE</span><i></i><span>SERVER</span></div><div class="consoleHead">SSH / CONSOLE SESSION <button id="hint">HINT -150</button></div><div id="terminal" class="terminal"><div id="output"></div><div class="line"><b id="prompt"></b><input id="cmd" autofocus autocomplete="off"></div></div><div id="hintText" class="hint">障害原因は伏せられてる。show系コマンドで切り分けや。</div></main></div></div><div id="win" class="win hidden"><div><strong>✓ INCIDENT RESOLVED</strong><p id="wintext"></p><button id="next">NEXT INCIDENT →</button></div></div><script src="/static/app.js"></script></body></html>
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NETOPS v4</title><link rel="stylesheet" href="/static/style.css"></head><body>
+<div class="app"><header><div><b>NETOPS</b><small>// CISCO INCIDENT SIMULATOR v4</small></div><span>● LAB ONLINE</span></header>
+<div class="layout"><aside><div class="eyebrow">INCIDENT QUEUE</div><div id="menu"></div></aside>
+<main><section class="case"><div class="casecopy"><small id="ticket"></small><h1 id="title"></h1><p id="brief"></p></div><div class="score">SCORE<b id="score">1000</b></div></section>
+<section class="workspace">
+<div class="panel"><div class="panelhead">KNOWN GOOD // 設計情報</div><div id="spec" class="spec"></div></div>
+<div class="panel"><div class="panelhead">NETWORK MAP</div><div id="topology" class="topology"></div><div class="note">※ 構成図は正常時の設計。障害箇所そのものは表示されません。</div></div>
+</section>
+<section class="console"><div class="consolehead"><span id="sessionName">SESSION</span><button id="hintBtn">REQUEST HINT −125</button></div>
+<div id="terminal" class="terminal"><div class="welcome">Troubleshooting session ready. Type <b>?</b> for available lab commands.<br><br></div><div id="output"></div><div class="input"><b id="prompt"></b><input id="cmd" autofocus autocomplete="off" spellcheck="false"></div></div>
+<div class="consolefoot"><span>ENTER Execute</span><span>↑↓ History</span><span>TAB Complete</span><span>? Help</span></div></section>
+<div id="hintText" class="hint">まず症状と「正常時の設計情報」を比較して、確認コマンドを選んでや。</div>
+</main></div></div>
+<div id="win" class="overlay hidden"><div class="winbox"><div class="check">✓</div><small>INCIDENT RESOLVED</small><h2 id="winTitle"></h2><p>設定が正常状態と一致しました。</p><b id="finalScore"></b><div><button id="retry">RETRY</button><button id="next">NEXT INCIDENT →</button></div></div></div>
+<script src="/static/app.js"></script></body></html>
