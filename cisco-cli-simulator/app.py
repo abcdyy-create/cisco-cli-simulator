@@ -20,7 +20,18 @@ def prompt(s):
  return h+({"user":">","priv":"#","config":"(config)#","if":"(config-if)#","router":"(config-router)#","dhcp":"(dhcp-config)#"}[m])
 def solved(s):
  d=s["data"];k=s["kind"]
- return {"if":d["admin"],"gw":d["gateway"]=="192.168.10.1","vlan":d["vlan"]==20,"trunk":d["trunk"],"route":d["route"],"ospf":d["ospf"],"dns":d["dns"]=="192.168.10.53","acl":d["acl"],"dhcp":d["dhcp"],"double":d["admin"] and d["route"]}[k]
+ if k=="if": return d.get("admin",False)
+ if k=="gw": return d.get("gateway")=="192.168.10.1"
+ if k=="vlan": return d.get("vlan")==20
+ if k=="trunk": return d.get("trunk",False)
+ if k=="route": return d.get("route",False)
+ if k=="ospf": return d.get("ospf",False)
+ if k=="dns": return d.get("dns")=="192.168.10.53"
+ if k=="acl": return d.get("acl",False)
+ if k=="dhcp": return d.get("dhcp",False)
+ if k=="double": return d.get("admin",False) and d.get("route",False)
+ return False
+
 def exec_cmd(raw,s):
  c=" ".join(raw.lower().strip().split());d=s["data"];k=s["kind"];m=s["mode"]
  if not c:return ""

@@ -1,10 +1,9 @@
-# v3.1 Fix
+# v3.2
+Renderの `KeyError: 'gateway'` を修正。
 
-The v3 build had a Flask session persistence bug: nested changes inside `state["data"]`
-could be lost between HTTP requests because Flask's cookie session did not always mark
-the session modified.
+原因は `solved()` が辞書リテラル内で10問分の判定式を一度に評価していたこと。
+Pythonは `[k]` で1問を選ぶ前に全valueを評価するため、1問目でも存在しない
+`gateway` キーへアクセスして500になっていました。
 
-v3.1 deep-copies and reassigns state after every command/hint, and explicitly marks
-the session modified.
-
-Replace all files in the GitHub repository with this ZIP and redeploy.
+v3.2では問題タイプごとの分岐に変更し、存在しないキーを評価しません。
+10種類の初期stateを使って判定関数を検証済みです。
