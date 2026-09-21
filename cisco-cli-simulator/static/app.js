@@ -1,56 +1,27 @@
-const $ = id => document.getElementById(id);
-let current = 1;
-let levels = [];
-
-async function start(level=1){
-  current = level;
-  const r = await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level})});
-  const d = await r.json();
-  $('levelNo').textContent = `CASE ${String(d.level.id).padStart(2,'0')}`;
-  $('title').textContent = d.level.title;
-  $('brief').textContent = d.level.brief;
-  $('goal').textContent = d.level.goal;
-  $('output').innerHTML = '';
-  $('success').classList.add('hidden');
-  $('prompt').textContent = d.state.hostname + '>';
-  renderLevels();
-  $('cmd').focus();
+const $=x=>document.getElementById(x);let history=[],hi=0,done=false;
+async function start(){
+ const r=await fetch('/api/start',{method:'POST'}),d=await r.json();
+ $('brief').textContent=d.mission.brief;$('ticket').textContent=d.mission.ticket;$('missionTitle').textContent=d.mission.title;
+ $('prompt').textContent=d.prompt;$('output').innerHTML='';$('score').textContent='1000';$('complete').classList.add('hidden');
+ $('hintText').textContent='ヒントは必要な時だけ使いや。';history=[];hi=0;done=false;topo(d.topology);$('cmd').focus();
 }
-
-async function loadLevels(){
-  levels = [
-    [1,'Interface Down','Gi0/1 復旧'],
-    [2,'VLAN Trouble','Fa0/3 → VLAN 20'],
-    [3,'Static Route','10.20.0.0/24'],
-    [4,'OSPF Neighbor','OSPF area 0'],
-    [5,'ACL Block','HTTPS permit']
-  ];
-  renderLevels();
-  start(1);
+function print(t,cls='out'){if(!t)return;let d=document.createElement('div');d.className=cls;d.textContent=t;$('output').appendChild(d);$('terminal').scrollTop=$('terminal').scrollHeight}
+function topo(t){$('wanwire').className='wire '+(t.r1wan==='up'?'ok':'bad');$('wanwire').innerHTML=t.r1wan==='up'?'':'<em>×</em>';if(t.server==='reachable')$('serverIcon').style.borderColor='var(--green)'}
+async function send(){
+ let i=$('cmd'),c=i.value.trim();if(!c)return;print($('prompt').textContent+' '+c,'echo');history.push(c);hi=history.length;i.value='';
+ let r=await fetch('/api/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c})}),d=await r.json();
+ print(d.output);$('prompt').textContent=d.prompt;$('score').textContent=d.score;topo(d.topology);
+ if(d.solved&&!done){done=true;setTimeout(()=>{$('finalScore').textContent=d.score;$('complete').classList.remove('hidden')},650)}i.focus()
 }
-function renderLevels(){
-  $('levels').innerHTML = levels.map(x=>`<button class="level ${x[0]===current?'active':''}" onclick="start(${x[0]})"><strong>CASE ${String(x[0]).padStart(2,'0')} · ${x[1]}</strong><small>${x[2]}</small></button>`).join('');
+function completion(v){
+ const cmds=['enable','configure terminal','show running-config','show ip interface brief','show interfaces GigabitEthernet0/0','show interfaces GigabitEthernet0/1','show ip route','copy running-config startup-config','interface GigabitEthernet0/0','interface GigabitEthernet0/1','no shutdown','shutdown'];
+ let m=cmds.filter(x=>x.toLowerCase().startsWith(v.toLowerCase()));return m.length===1?m[0]:v
 }
-function print(text){
-  if(!text)return;
-  const d=document.createElement('div');d.className='out';d.textContent=text;$('output').appendChild(d);
-  $('terminal').scrollTop=$('terminal').scrollHeight;
-}
-async function command(){
-  const input=$('cmd'), cmd=input.value.trim();
-  if(!cmd)return;
-  const oldPrompt=$('prompt').textContent;
-  print(`${oldPrompt} ${cmd}`);
-  input.value='';
-  const r=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})});
-  const d=await r.json();
-  print(d.output);
-  $('prompt').textContent=d.prompt;
-  if(d.solved)$('success').classList.remove('hidden');
-  input.focus();
-}
-$('cmd').addEventListener('keydown',e=>{if(e.key==='Enter')command()});
-$('reset').onclick=()=>start(current);
-$('clear').onclick=()=>{$('output').innerHTML='';$('cmd').focus()};
-$('next').onclick=()=>start(Math.min(current+1,levels.length));
-loadLevels();
+$('cmd').addEventListener('keydown',e=>{
+ if(e.key==='Enter')send();
+ else if(e.key==='ArrowUp'){e.preventDefault();if(history.length){hi=Math.max(0,hi-1);$('cmd').value=history[hi]}}
+ else if(e.key==='ArrowDown'){e.preventDefault();if(history.length){hi=Math.min(history.length,hi+1);$('cmd').value=hi===history.length?'':history[hi]}}
+ else if(e.key==='Tab'){e.preventDefault();$('cmd').value=completion($('cmd').value)}
+});
+$('hint').onclick=async()=>{let r=await fetch('/api/hint',{method:'POST'}),d=await r.json();$('hintText').textContent=d.hint};
+$('reset').onclick=start;$('again').onclick=start;start();

@@ -1,231 +1,200 @@
 from flask import Flask, render_template, request, jsonify, session
-import secrets
+import os, copy, time
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)
+app.secret_key = os.environ.get("SECRET_KEY", "dev-change-me")
 
-LEVELS = [
-    {
-        "id": 1,
-        "title": "Interface Down",
-        "brief": "PC-A から Router R1 の Gi0/1 側ネットワークへ通信できません。R1 の該当インターフェースを復旧してください。",
-        "start": {"hostname": "R1", "mode": "user", "interfaces": {"GigabitEthernet0/1": {"ip": None, "mask": None, "up": False}}},
-        "answer": ["interface gigabitethernet0/1", "interface gi0/1", "ip address 192.168.10.1 255.255.255.0", "no shutdown"],
-        "goal": "Gi0/1 に 192.168.10.1/24 を設定し、no shutdown する。",
+BASE = {
+    "hostname": "R1",
+    "mode": "user",
+    "current_interface": None,
+    "interfaces": {
+        "GigabitEthernet0/0": {"ip":"192.168.10.1","mask":"255.255.255.0","admin":True,"link":True,"desc":"LAN → SW1"},
+        "GigabitEthernet0/1": {"ip":"10.0.12.1","mask":"255.255.255.252","admin":False,"link":True,"desc":"WAN → R2"},
     },
-    {
-        "id": 2,
-        "title": "VLAN Trouble",
-        "brief": "SW1 の PC-A ポートが正しい VLAN に入っていません。Fa0/3 を VLAN 20 の access port にしてください。",
-        "start": {"hostname": "SW1", "mode": "user", "interfaces": {"FastEthernet0/3": {"vlan": 1, "mode": "dynamic"}}},
-        "answer": ["interface fastethernet0/3", "interface fa0/3", "switchport mode access", "switchport access vlan 20"],
-        "goal": "Fa0/3 を access mode、VLAN 20 にする。",
-    },
-    {
-        "id": 3,
-        "title": "Static Route",
-        "brief": "R1 から 10.20.0.0/24 へ到達できません。隣の R2 は 192.168.1.2 です。R1 に静的ルートを追加してください。",
-        "start": {"hostname": "R1", "mode": "user", "routes": []},
-        "answer": ["ip route 10.20.0.0 255.255.255.0 192.168.1.2"],
-        "goal": "10.20.0.0/24 を 192.168.1.2 経由で追加する。",
-    },
-    {
-        "id": 4,
-        "title": "OSPF Neighbor",
-        "brief": "R1 と R2 が OSPF ネイバーになりません。R1 の OSPF process 1 に 192.168.10.0/24 を area 0 として追加してください。",
-        "start": {"hostname": "R1", "mode": "user", "ospf": {"process": None, "networks": []}},
-        "answer": ["router ospf 1", "network 192.168.10.0 0.0.0.255 area 0"],
-        "goal": "OSPF process 1 を起動し、192.168.10.0/24 を area 0 に参加させる。",
-    },
-    {
-        "id": 5,
-        "title": "ACL Block",
-        "brief": "管理用 PC (192.168.50.10) から Web Server (10.10.10.10) に HTTPS 接続できるようにしてください。ACL 101 に HTTPS を許可する行を追加します。",
-        "start": {"hostname": "R1", "mode": "user", "acl": []},
-        "answer": ["access-list 101 permit tcp host 192.168.50.10 host 10.10.10.10 eq 443"],
-        "goal": "指定の送信元から指定サーバーへの TCP/443 を許可する。",
-    },
-]
+    "routes": [
+        {"type":"C","net":"192.168.10.0/24","via":None,"interface":"GigabitEthernet0/0"},
+    ],
+    "saved": False,
+    "commands": 0,
+    "hints": 0,
+    "started": 0,
+}
 
-def fresh_state(level):
-    import copy
-    return copy.deepcopy(level["start"])
+MISSION = {
+    "title":"THE SILENT UPLINK",
+    "ticket":"INC-2048",
+    "brief":"営業部のPC-Aから社内Webサーバーへアクセスできない。ユーザーから分かっているのは「朝から急につながらない」だけ。R1を調査し、原因を特定して通信を復旧せよ。",
+    "pc":"192.168.10.20/24",
+    "server":"10.20.0.10",
+}
+
+def fresh():
+    s=copy.deepcopy(BASE); s["started"]=int(time.time()); return s
+
+def norm(x): return " ".join(x.strip().lower().split())
+
+def canonical_if(x):
+    x=norm(x).replace(" ","")
+    aliases={
+        "gi0/0":"GigabitEthernet0/0","gig0/0":"GigabitEthernet0/0","gigabitethernet0/0":"GigabitEthernet0/0",
+        "gi0/1":"GigabitEthernet0/1","gig0/1":"GigabitEthernet0/1","gigabitethernet0/1":"GigabitEthernet0/1",
+    }
+    return aliases.get(x)
+
+def prompt(s):
+    h=s["hostname"]; m=s["mode"]
+    return {"user":f"{h}>","priv":f"{h}#","config":f"{h}(config)#","config-if":f"{h}(config-if)#"}[m]
+
+def connected(s, name):
+    i=s["interfaces"][name]
+    return i["admin"] and i["link"]
+
+def solved(s):
+    return connected(s,"GigabitEthernet0/1")
+
+def routes_text(s):
+    rows=["Codes: C - connected, S - static", ""]
+    for name,i in s["interfaces"].items():
+        if connected(s,name):
+            if name=="GigabitEthernet0/0": net="192.168.10.0/24"
+            else: net="10.0.12.0/30"
+            rows.append(f"C    {net} is directly connected, {name}")
+    if solved(s):
+        rows.append("S    10.20.0.0/24 [1/0] via 10.0.12.2")
+    return "\n".join(rows)
+
+def run_config(s):
+    out=["Building configuration...","","Current configuration : 1042 bytes","!","version 15.9","service timestamps debug datetime msec","service timestamps log datetime msec","!",f"hostname {s['hostname']}","!"]
+    for name,i in s["interfaces"].items():
+        out += [f"interface {name}", f" description {i['desc']}", f" ip address {i['ip']} {i['mask']}"]
+        if not i["admin"]: out.append(" shutdown")
+        out.append("!")
+    out += ["ip route 10.20.0.0 255.255.255.0 10.0.12.2","!","line con 0","line vty 0 4"," login","!","end"]
+    return "\n".join(out)
+
+HELP = {
+"user":["enable","ping <ip>","show ?"],
+"priv":["configure terminal","show running-config","show ip interface brief","show interfaces <interface>","show ip route","ping <ip>","copy running-config startup-config","disable"],
+"config":["interface <interface>","hostname <name>","do show ...","end","exit"],
+"config-if":["no shutdown","shutdown","description <text>","do show ...","end","exit"],
+}
+
+def help_text(s, prefix):
+    cmds=HELP[s["mode"]]
+    p=norm(prefix)
+    hits=[c for c in cmds if norm(c).startswith(p)]
+    return "\n".join(hits or cmds)
+
+def execute(raw,s):
+    c=norm(raw); mode=s["mode"]
+    if not c: return ""
+
+    if c.endswith("?"):
+        return help_text(s,c[:-1].strip())
+
+    # navigation
+    if c in ("enable","en") and mode=="user": s["mode"]="priv"; return ""
+    if c=="disable" and mode=="priv": s["mode"]="user"; return ""
+    if c in ("configure terminal","conf t","conf ter") and mode=="priv":
+        s["mode"]="config"; return "Enter configuration commands, one per line.  End with CNTL/Z."
+    if c=="end" and mode in ("config","config-if"): s["mode"]="priv"; s["current_interface"]=None; return ""
+    if c=="exit" and mode=="config-if": s["mode"]="config"; s["current_interface"]=None; return ""
+    if c=="exit" and mode=="config": s["mode"]="priv"; return ""
+
+    # do from config modes
+    if c.startswith("do ") and mode in ("config","config-if"):
+        old=s["mode"]; s["mode"]="priv"; out=execute(raw.strip()[3:],s); s["mode"]=old; return out
+
+    # show
+    if mode=="priv" and c in ("show ip interface brief","sh ip int br","sh ip int brief"):
+        lines=["Interface              IP-Address      OK? Method Status                Protocol"]
+        for name,i in s["interfaces"].items():
+            status="up" if i["admin"] and i["link"] else ("administratively down" if not i["admin"] else "down")
+            proto="up" if i["admin"] and i["link"] else "down"
+            lines.append(f"{name:<23}{i['ip']:<16}YES manual {status:<21}{proto}")
+        return "\n".join(lines)
+    if mode=="priv" and c in ("show running-config","show run","sh run"):
+        return run_config(s)
+    if mode=="priv" and c in ("show ip route","sh ip route"):
+        return routes_text(s)
+    if mode=="priv" and (c.startswith("show interfaces ") or c.startswith("sh int ")):
+        arg=raw.split(None,2)[-1]; name=canonical_if(arg)
+        if not name: return "% Invalid interface"
+        i=s["interfaces"][name]
+        line="up" if i["admin"] and i["link"] else ("administratively down" if not i["admin"] else "down")
+        proto="up" if i["admin"] and i["link"] else "down"
+        return f"{name} is {line}, line protocol is {proto}\n  Description: {i['desc']}\n  Internet address is {i['ip']}/" + ("24" if i["mask"].endswith(".0") else "30") + "\n  MTU 1500 bytes, BW 1000000 Kbit/sec\n  5 minute input rate 0 bits/sec, 0 packets/sec\n  5 minute output rate 0 bits/sec, 0 packets/sec"
+
+    # config
+    if mode=="config" and c.startswith("interface "):
+        name=canonical_if(raw.split(None,1)[1])
+        if not name: return "% Invalid interface type and number"
+        s["current_interface"]=name; s["mode"]="config-if"; return ""
+    if mode=="config" and c.startswith("hostname "):
+        s["hostname"]=raw.strip().split(None,1)[1]; return ""
+
+    if mode=="config-if":
+        name=s["current_interface"]; i=s["interfaces"][name]
+        if c in ("no shutdown","no shut"):
+            was=connected(s,name); i["admin"]=True
+            if not was and i["link"]:
+                return f"*LINK-3-UPDOWN: Interface {name}, changed state to up\n*LINEPROTO-5-UPDOWN: Line protocol on Interface {name}, changed state to up"
+            return ""
+        if c in ("shutdown","shut"):
+            i["admin"]=False
+            return f"*LINK-5-CHANGED: Interface {name}, changed state to administratively down"
+        if c.startswith("description "):
+            i["desc"]=raw.strip().split(None,1)[1]; return ""
+
+    if mode=="priv" and c.startswith("ping "):
+        target=c.split(None,1)[1]
+        ok = target in ("192.168.10.20","192.168.10.1") or (solved(s) and target in ("10.0.12.2","10.20.0.10"))
+        marks="!!!!!" if ok else "....."
+        rate="100" if ok else "0"
+        return f"Type escape sequence to abort.\nSending 5, 100-byte ICMP Echos to {target}, timeout is 2 seconds:\n{marks}\nSuccess rate is {rate} percent (5/5)" if ok else f"Type escape sequence to abort.\nSending 5, 100-byte ICMP Echos to {target}, timeout is 2 seconds:\n{marks}\nSuccess rate is {rate} percent (0/5)"
+    if mode=="user" and c.startswith("ping "):
+        target=c.split(None,1)[1]
+        ok=target=="192.168.10.1" or (solved(s) and target=="10.20.0.10")
+        return f"Type escape sequence to abort.\nSending 5, 100-byte ICMP Echos to {target}, timeout is 2 seconds:\n{'!!!!!' if ok else '.....'}\nSuccess rate is {'100 percent (5/5)' if ok else '0 percent (0/5)'}"
+    if mode=="priv" and c in ("copy running-config startup-config","copy run start","wr","write memory"):
+        s["saved"]=True
+        return "Building configuration...\n[OK]"
+
+    return "% Invalid input detected at '^' marker."
 
 @app.route("/")
-def index():
-    if "level" not in session:
-        session["level"] = 1
-    return render_template("index.html")
+def index(): return render_template("index.html")
 
-@app.route("/api/start", methods=["POST"])
+@app.post("/api/start")
 def start():
-    level_id = int(request.json.get("level", 1))
-    level = next((x for x in LEVELS if x["id"] == level_id), LEVELS[0])
-    session["level"] = level_id
-    session["state"] = fresh_state(level)
-    return jsonify(level=level, state=session["state"])
+    session["state"]=fresh()
+    return jsonify(mission=MISSION,prompt="R1>",topology=topology(session["state"]))
 
-@app.route("/api/reset", methods=["POST"])
-def reset():
-    level_id = int(session.get("level", 1))
-    level = next(x for x in LEVELS if x["id"] == level_id)
-    session["state"] = fresh_state(level)
-    return jsonify(level=level, state=session["state"])
+def topology(s):
+    return {"r1wan": "up" if connected(s,"GigabitEthernet0/1") else "down",
+            "server": "reachable" if solved(s) else "unreachable"}
 
-def normalize(s):
-    return " ".join(s.strip().lower().split())
+@app.post("/api/cmd")
+def cmd():
+    s=session.get("state") or fresh()
+    raw=request.json.get("command","")
+    s["commands"]+=1
+    out=execute(raw,s)
+    session["state"]=s
+    score=max(100,1000-s["commands"]*12-s["hints"]*150)
+    return jsonify(output=out,prompt=prompt(s),solved=solved(s),score=score,topology=topology(s))
 
-def prompt(state):
-    mode = state.get("mode", "user")
-    h = state.get("hostname", "R1")
-    if mode == "user": return f"{h}>"
-    if mode == "priv": return f"{h}#"
-    if mode == "config": return f"{h}(config)#"
-    if mode == "config-if": return f"{h}(config-if)#"
-    if mode == "config-router": return f"{h}(config-router)#"
-    if mode == "config-acl": return f"{h}(config-ext-nacl)#"
-    return f"{h}>"
+@app.post("/api/hint")
+def hint():
+    s=session.get("state") or fresh(); s["hints"]+=1; session["state"]=s
+    hints=[
+        "まずはL3インターフェースの状態を一覧で確認してみよ。",
+        "WAN側は Gi0/1。Status と Protocol に注目。",
+        "administratively down は物理断とは意味がちゃうで。",
+        "Gi0/1 の interface configuration mode で shutdown 状態を解除する。",
+    ]
+    return jsonify(hint=hints[min(s["hints"]-1,len(hints)-1)],hints=s["hints"])
 
-def execute(cmd, state):
-    c = normalize(cmd)
-    out = []
-    new = dict(state)
-    mode = state.get("mode", "user")
-
-    if not c:
-        return "", new
-
-    if c in ("enable", "en") and mode == "user":
-        new["mode"] = "priv"
-        return "", new
-    if c in ("disable",) and mode == "priv":
-        new["mode"] = "user"
-        return "", new
-    if c in ("configure terminal", "conf t") and mode == "priv":
-        new["mode"] = "config"
-        return "Enter configuration commands, one per line. End with CNTL/Z.", new
-    if c in ("end", "exit") and mode in ("config", "config-if", "config-router", "config-acl"):
-        new["mode"] = "priv" if c == "end" or mode == "config" else "config"
-        return "", new
-
-    if c in ("show running-config", "show run") and mode == "priv":
-        out.append("Building configuration...")
-        out.append(f"hostname {state.get('hostname','R1')}")
-        for name, itf in state.get("interfaces", {}).items():
-            out.append(f"interface {name}")
-            if itf.get("ip"):
-                out.append(f" ip address {itf['ip']} {itf['mask']}")
-            if itf.get("vlan") is not None:
-                out.append(f" switchport access vlan {itf['vlan']}")
-            if itf.get("mode") == "access":
-                out.append(" switchport mode access")
-            if itf.get("up"):
-                out.append(" no shutdown")
-        for route in state.get("routes", []):
-            out.append(f"ip route {route}")
-        if state.get("ospf", {}).get("process"):
-            out.append(f"router ospf {state['ospf']['process']}")
-            for n in state["ospf"]["networks"]:
-                out.append(f" network {n}")
-        for a in state.get("acl", []):
-            out.append(f"access-list 101 {a}")
-        return "\n".join(out), new
-
-    if c == "show ip interface brief" and mode == "priv":
-        out.append("Interface              IP-Address      Status    Protocol")
-        for name, itf in state.get("interfaces", {}).items():
-            ip = itf.get("ip") or "unassigned"
-            status = "up" if itf.get("up") else "administratively down"
-            proto = "up" if itf.get("up") else "down"
-            out.append(f"{name:<23}{ip:<16}{status:<10}{proto}")
-        return "\n".join(out), new
-
-    # Configuration commands
-    if mode == "config" and c.startswith("interface "):
-        arg = c[10:].strip()
-        aliases = {"gi0/1": "GigabitEthernet0/1", "gigabitethernet0/1": "GigabitEthernet0/1",
-                   "fa0/3": "FastEthernet0/3", "fastethernet0/3": "FastEthernet0/3"}
-        name = aliases.get(arg, arg)
-        new.setdefault("interfaces", {}).setdefault(name, {})
-        new["current_interface"] = name
-        new["mode"] = "config-if"
-        return "", new
-
-    if mode == "config" and c.startswith("router ospf "):
-        pid = c.split()[-1]
-        new.setdefault("ospf", {})["process"] = pid
-        new["mode"] = "config-router"
-        return "", new
-
-    if mode == "config" and c.startswith("access-list 101 "):
-        rest = cmd.strip()[15:].strip()
-        new.setdefault("acl", []).append(rest)
-        return "", new
-
-    if mode == "config-if":
-        name = new.get("current_interface")
-        itf = new["interfaces"][name]
-        if c.startswith("ip address "):
-            parts = cmd.strip().split()
-            if len(parts) == 4:
-                itf["ip"], itf["mask"] = parts[2], parts[3]
-                return "", new
-        if c == "no shutdown":
-            itf["up"] = True
-            return "Interface is up.", new
-        if c == "shutdown":
-            itf["up"] = False
-            return "", new
-        if c == "switchport mode access":
-            itf["mode"] = "access"
-            return "", new
-        if c.startswith("switchport access vlan "):
-            itf["vlan"] = int(c.split()[-1])
-            return "", new
-
-    if mode == "config-router" and c.startswith("network "):
-        rest = cmd.strip()[8:].strip()
-        new.setdefault("ospf", {}).setdefault("networks", []).append(rest)
-        return "", new
-
-    if mode == "config" and c.startswith("ip route "):
-        rest = cmd.strip()[9:].strip()
-        new.setdefault("routes", []).append(rest)
-        return "", new
-
-    if c.startswith("ping ") and mode == "priv":
-        target = c[5:].strip()
-        return f"Type escape sequence to abort.\nSending 5, 100-byte ICMP Echos to {target}, timeout is 2 seconds:\n!!!!!\nSuccess rate is 100 percent (5/5)", new
-
-    return f"% Invalid input detected at '^' marker.\n{prompt(state)} {cmd}", new
-
-def check(level, state):
-    if level == 1:
-        i = state["interfaces"].get("GigabitEthernet0/1", {})
-        return i.get("ip") == "192.168.10.1" and i.get("mask") == "255.255.255.0" and i.get("up") is True
-    if level == 2:
-        i = state["interfaces"].get("FastEthernet0/3", {})
-        return i.get("vlan") == 20 and i.get("mode") == "access"
-    if level == 3:
-        return "10.20.0.0 255.255.255.0 192.168.1.2" in state.get("routes", [])
-    if level == 4:
-        return state.get("ospf", {}).get("process") == "1" and any(
-            x == "192.168.10.0 0.0.0.255 area 0" for x in state.get("ospf", {}).get("networks", [])
-        )
-    if level == 5:
-        return any(normalize(x) == "permit tcp host 192.168.50.10 host 10.10.10.10 eq 443" for x in state.get("acl", []))
-    return False
-
-@app.route("/api/command", methods=["POST"])
-def command():
-    cmd = request.json.get("command", "")
-    level_id = int(session.get("level", 1))
-    level = next(x for x in LEVELS if x["id"] == level_id)
-    state = session.get("state", fresh_state(level))
-    output, state = execute(cmd, state)
-    solved = check(level_id, state)
-    session["state"] = state
-    return jsonify(output=output, prompt=prompt(state), solved=solved)
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+if __name__=="__main__":
+    app.run(host="0.0.0.0",port=int(os.environ.get("PORT",5000)),debug=True)

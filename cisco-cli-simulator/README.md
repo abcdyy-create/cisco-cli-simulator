@@ -1,42 +1,26 @@
-# Cisco CLI Simulator
+# NETOPS // Cisco Incident Simulator v2
 
-Python + Flask で作った、Cisco IOS風のコマンド入力ゲームです。
+Cisco IOS風CLIで障害を調査・復旧するブラウザゲーム。
 
-## ローカルで起動
+## 今回のステージ
+PC-AからWEB-SRVへ到達不能。答えは画面に表示されません。
+`show`、`ping`などで調査して原因を特定します。
 
-```bash
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
-
-pip install -r requirements.txt
-python app.py
-```
-
-ブラウザで http://127.0.0.1:5000/ を開きます。
-
-## Renderで公開
-
-1. このフォルダをGitHubリポジトリにpush
-2. RenderでNew > Web Service
-3. GitHubリポジトリを選択
-4. Build Command: `pip install -r requirements.txt`
-5. Start Command: `gunicorn app:app`
-6. Freeプランで作成
-
-`render.yaml` も入っているのでBlueprintとして読み込むこともできます。
-
-## 今後追加できるもの
-
-- コマンド履歴（↑↓）
+## 主な機能
+- IOS風モード遷移
+- `show run`, `show ip interface brief`, `show ip route`, `show interfaces`
+- ping
+- `?` ヘルプ
 - Tab補完
-- 本物っぽいIOSエラー
-- showコマンド増加
-- VLAN/Trunk/STP
-- OSPF/BGP
-- NAT/DHCP/ACL
-- スコア・タイムアタック
-- ネットワーク構成図
-- ランダム障害生成
+- ↑↓ コマンド履歴
+- `do show`
+- ヒントとスコア
+- ライブトポロジー
+- Cisco風ログ
+- Render対応
+
+## Render
+Build: `pip install -r requirements.txt`
+Start: `gunicorn app:app`
+
+既存GitHubリポジトリのファイルをこのZIPの中身で置き換えてpushすれば、自動デプロイできます。

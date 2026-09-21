@@ -1,70 +1,34 @@
-<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Cisco CLI Simulator</title>
-<link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-<div class="app">
-  <header>
-    <div>
-      <div class="eyebrow">NETWORK TRAINING GAME</div>
-      <h1>Cisco CLI Simulator</h1>
-    </div>
-    <div class="badge">IOS MODE</div>
-  </header>
-
-  <main>
-    <aside>
-      <h2>SCENARIOS</h2>
-      <div id="levels"></div>
-      <div class="hint">
-        <b>基本操作</b>
-        <p><code>enable</code> → 特権EXEC</p>
-        <p><code>conf t</code> → config</p>
-        <p><code>end</code> → EXECへ</p>
-      </div>
-    </aside>
-
-    <section class="game">
-      <div class="mission">
-        <div>
-          <span id="levelNo">CASE 01</span>
-          <h2 id="title">Loading...</h2>
-          <p id="brief"></p>
-        </div>
-        <div class="goal">
-          <span>GOAL</span>
-          <p id="goal"></p>
-        </div>
-      </div>
-
-      <div id="terminal" class="terminal">
-        <div id="output"></div>
-        <div class="inputline">
-          <span id="prompt">R1&gt;</span>
-          <input id="cmd" autocomplete="off" spellcheck="false" autofocus>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button id="reset">↻ RESET</button>
-        <button id="clear">CLEAR</button>
-      </div>
-
-      <div id="success" class="success hidden">
-        <div class="check">✓</div>
-        <div>
-          <h2>MISSION COMPLETE</h2>
-          <p>障害が復旧したで。次のCASEへ進めるで！</p>
-          <button id="next">NEXT CASE →</button>
-        </div>
-      </div>
-    </section>
-  </main>
+<!doctype html><html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NETOPS // Cisco Incident Simulator</title><link rel="stylesheet" href="/static/style.css">
+</head><body>
+<div class="shell">
+<header><div class="brand"><span class="mark">N//</span><div><b>NETOPS</b><small>CISCO INCIDENT SIMULATOR</small></div></div><div class="status"><i></i> LAB ONLINE</div></header>
+<div class="hud">
+ <div><small>INCIDENT</small><b id="ticket">INC-2048</b></div>
+ <div><small>MISSION</small><b id="missionTitle">THE SILENT UPLINK</b></div>
+ <div><small>SCORE</small><b id="score">1000</b></div>
 </div>
-<script src="/static/app.js"></script>
-</body>
-</html>
+<main>
+<section class="left">
+ <div class="card ticket"><div class="cap">SERVICE DESK TICKET</div><h1>通信障害を復旧せよ</h1><p id="brief"></p><div class="facts"><span>PC-A <b>192.168.10.20/24</b></span><span>WEB-SRV <b>10.20.0.10</b></span></div></div>
+ <div class="card topo"><div class="cap">LIVE TOPOLOGY</div>
+  <div class="network">
+   <div class="node"><div class="icon">PC</div><b>PC-A</b><small>192.168.10.20</small></div><div class="wire ok"></div>
+   <div class="node"><div class="icon sw">SW</div><b>SW1</b><small>ACCESS</small></div><div class="wire ok"></div>
+   <div class="node"><div class="icon router">R1</div><b>R1</b><small>Gi0/0</small></div><div id="wanwire" class="wire bad"><em>×</em></div>
+   <div class="node"><div class="icon router">R2</div><b>R2</b><small>EDGE</small></div><div class="wire muted"></div>
+   <div class="node"><div id="serverIcon" class="icon server">WEB</div><b>WEB-SRV</b><small>10.20.0.10</small></div>
+  </div>
+  <div class="legend"><span><i class="g"></i>UP</span><span><i class="r"></i>FAULT</span><span>Topology shows reachability, not the cause.</span></div>
+ </div>
+ <div class="card tools"><div class="cap">FIELD TOOLS</div><button id="hint">REQUEST HINT <small>-150 pts</small></button><div id="hintText">ヒントは必要な時だけ使いや。</div></div>
+</section>
+<section class="right">
+ <div class="terminalHead"><div><span class="dot"></span> SSH SESSION // R1 <small>10.255.0.1</small></div><div>IOS 15.9 · VT100</div></div>
+ <div id="terminal" class="terminal"><div class="boot">Connected to R1.<br>Authorized access only.<br><br></div><div id="output"></div><div class="inputline"><span id="prompt">R1&gt;</span><input id="cmd" autofocus autocomplete="off" spellcheck="false"></div></div>
+ <div class="terminalFoot"><span>↑↓ HISTORY</span><span>TAB COMPLETE</span><span>? HELP</span><button id="reset">RESET LAB</button></div>
+</section>
+</main>
+<div id="complete" class="overlay hidden"><div class="complete"><div class="bigcheck">✓</div><div class="cap">INCIDENT RESOLVED</div><h2>CONNECTIVITY RESTORED</h2><p>PC-A → WEB-SRV の疎通が復旧した。</p><div class="finalscore">SCORE <b id="finalScore">0000</b></div><button id="again">RUN AGAIN</button></div></div>
+</div><script src="/static/app.js"></script></body></html>
