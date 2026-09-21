@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cisco CLI Simulator</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="eyebrow">NETWORK TRAINING GAME</div>
+      <h1>Cisco CLI Simulator</h1>
+    </div>
+    <div class="badge">IOS MODE</div>
+  </header>
+
+  <main>
+    <aside>
+      <h2>SCENARIOS</h2>
+      <div id="levels"></div>
+      <div class="hint">
+        <b>基本操作</b>
+        <p><code>enable</code> → 特権EXEC</p>
+        <p><code>conf t</code> → config</p>
+        <p><code>end</code> → EXECへ</p>
+      </div>
+    </aside>
+
+    <section class="game">
+      <div class="mission">
+        <div>
+          <span id="levelNo">CASE 01</span>
+          <h2 id="title">Loading...</h2>
+          <p id="brief"></p>
+        </div>
+        <div class="goal">
+          <span>GOAL</span>
+          <p id="goal"></p>
+        </div>
+      </div>
+
+      <div id="terminal" class="terminal">
+        <div id="output"></div>
+        <div class="inputline">
+          <span id="prompt">R1&gt;</span>
+          <input id="cmd" autocomplete="off" spellcheck="false" autofocus>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="reset">↻ RESET</button>
+        <button id="clear">CLEAR</button>
+      </div>
+
+      <div id="success" class="success hidden">
+        <div class="check">✓</div>
+        <div>
+          <h2>MISSION COMPLETE</h2>
+          <p>障害が復旧したで。次のCASEへ進めるで！</p>
+          <button id="next">NEXT CASE →</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
