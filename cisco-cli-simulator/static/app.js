@@ -1,27 +1,8 @@
-const $=x=>document.getElementById(x);let history=[],hi=0,done=false;
-async function start(){
- const r=await fetch('/api/start',{method:'POST'}),d=await r.json();
- $('brief').textContent=d.mission.brief;$('ticket').textContent=d.mission.ticket;$('missionTitle').textContent=d.mission.title;
- $('prompt').textContent=d.prompt;$('output').innerHTML='';$('score').textContent='1000';$('complete').classList.add('hidden');
- $('hintText').textContent='ヒントは必要な時だけ使いや。';history=[];hi=0;done=false;topo(d.topology);$('cmd').focus();
-}
-function print(t,cls='out'){if(!t)return;let d=document.createElement('div');d.className=cls;d.textContent=t;$('output').appendChild(d);$('terminal').scrollTop=$('terminal').scrollHeight}
-function topo(t){$('wanwire').className='wire '+(t.r1wan==='up'?'ok':'bad');$('wanwire').innerHTML=t.r1wan==='up'?'':'<em>×</em>';if(t.server==='reachable')$('serverIcon').style.borderColor='var(--green)'}
-async function send(){
- let i=$('cmd'),c=i.value.trim();if(!c)return;print($('prompt').textContent+' '+c,'echo');history.push(c);hi=history.length;i.value='';
- let r=await fetch('/api/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c})}),d=await r.json();
- print(d.output);$('prompt').textContent=d.prompt;$('score').textContent=d.score;topo(d.topology);
- if(d.solved&&!done){done=true;setTimeout(()=>{$('finalScore').textContent=d.score;$('complete').classList.remove('hidden')},650)}i.focus()
-}
-function completion(v){
- const cmds=['enable','configure terminal','show running-config','show ip interface brief','show interfaces GigabitEthernet0/0','show interfaces GigabitEthernet0/1','show ip route','copy running-config startup-config','interface GigabitEthernet0/0','interface GigabitEthernet0/1','no shutdown','shutdown'];
- let m=cmds.filter(x=>x.toLowerCase().startsWith(v.toLowerCase()));return m.length===1?m[0]:v
-}
-$('cmd').addEventListener('keydown',e=>{
- if(e.key==='Enter')send();
- else if(e.key==='ArrowUp'){e.preventDefault();if(history.length){hi=Math.max(0,hi-1);$('cmd').value=history[hi]}}
- else if(e.key==='ArrowDown'){e.preventDefault();if(history.length){hi=Math.min(history.length,hi+1);$('cmd').value=hi===history.length?'':history[hi]}}
- else if(e.key==='Tab'){e.preventDefault();$('cmd').value=completion($('cmd').value)}
-});
+const MISSIONS=[{"id": 1, "title": "THE SILENT UPLINK", "ticket": "INC-2048", "brief": "PC-Aから社内Webサーバーへ到達できない。朝から突然つながらない。R1を調査して復旧せよ。", "tag": "Interface shutdown"}, {"id": 2, "title": "WRONG GATEWAY", "ticket": "INC-2051", "brief": "開発PCから別セグメントへ通信できない。同一LAN内の通信は正常。端末設定を調査して復旧せよ。", "tag": "Default gateway"}, {"id": 3, "title": "VLAN DRIFT", "ticket": "INC-2057", "brief": "経理PCだけ社内ネットワークへ接続できない。同じスイッチの他部署PCは正常。SW1を調査せよ。", "tag": "Access VLAN"}, {"id": 4, "title": "TRUNK LOST", "ticket": "INC-2062", "brief": "VLAN 10の端末から別スイッチ側の同一VLAN端末へ通信できない。SW1-SW2間を調査せよ。", "tag": "Trunk"}, {"id": 5, "title": "MISSING ROUTE", "ticket": "INC-2070", "brief": "R1から支社LAN 10.30.0.0/24へ到達できない。WANリンク自体は正常。ルーティングを調査せよ。", "tag": "Static route"}, {"id": 6, "title": "OSPF SILENCE", "ticket": "INC-2078", "brief": "R1とR2のリンクはUPだが、OSPFで経路交換されない。R1の設定を調査せよ。", "tag": "OSPF network"}, {"id": 7, "title": "DNS OR NETWORK?", "ticket": "INC-2084", "brief": "ユーザーから『社内Wikiが開けない』と連絡。IP直打ちでは挙動が違うらしい。原因を切り分けよ。", "tag": "DNS"}, {"id": 8, "title": "ACL LOCKOUT", "ticket": "INC-2091", "brief": "管理PCからWebサーバーへのHTTPSだけ失敗する。ICMPは通る。R1のフィルタ設定を調査せよ。", "tag": "ACL"}, {"id": 9, "title": "DHCP BLACKOUT", "ticket": "INC-2099", "brief": "新しく接続したPCが169.254.x.xになり通信できない。既存端末は正常。DHCP設定を調査せよ。", "tag": "DHCP pool"}, {"id": 10, "title": "DOUBLE FAULT", "ticket": "INC-2105", "brief": "支社サーバーへの通信が完全に停止。今回は障害が1か所とは限らない。調査・復旧・疎通確認まで行え。", "tag": "Compound"}];let level=1,hist=[],hp=0,done=new Set();const $=x=>document.getElementById(x);
+function menu(){$('missions').innerHTML=MISSIONS.map(m=>`<button class="mission ${m.id===level?'active':''} ${done.has(m.id)?'done':''}" onclick="start(${m.id})"><b>${String(m.id).padStart(2,'0')} // ${m.title}</b><small>${m.tag}</small></button>`).join('')}
+async function start(n){level=n;let r=await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level:n})}),d=await r.json();$('ticket').textContent=d.state.ticket;$('title').textContent=d.state.title;$('brief').textContent=d.state.brief;$('device').textContent=d.state.host;$('prompt').textContent=d.prompt;$('output').innerHTML='';$('score').textContent=1000;$('hintText').textContent='障害原因は伏せられてる。show系コマンドで切り分けや。';$('win').classList.add('hidden');$('fault').style.background='#ff536a';hist=[];hp=0;menu();$('cmd').focus()}
+function print(t,c='out'){if(!t)return;let x=document.createElement('div');x.className=c;x.textContent=t;$('output').appendChild(x);$('terminal').scrollTop=$('terminal').scrollHeight}
+async function send(){let c=$('cmd').value.trim();if(!c)return;print($('prompt').textContent+' '+c,'echo');hist.push(c);hp=hist.length;$('cmd').value='';let r=await fetch('/api/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c})}),d=await r.json();print(d.output);$('prompt').textContent=d.prompt;$('score').textContent=d.score;if(d.solved){done.add(level);$('fault').style.background='#43ef8b';setTimeout(()=>{$('wintext').textContent=`CASE ${String(level).padStart(2,'0')} CLEAR // SCORE ${d.score}`;$('win').classList.remove('hidden');menu()},450)}}
+$('cmd').onkeydown=e=>{if(e.key==='Enter')send();if(e.key==='ArrowUp'){e.preventDefault();if(hist.length){$('cmd').value=hist[Math.max(0,--hp)]}}if(e.key==='ArrowDown'){e.preventDefault();if(hist.length){$('cmd').value=hist[Math.min(hist.length-1,++hp)]||''}}};
 $('hint').onclick=async()=>{let r=await fetch('/api/hint',{method:'POST'}),d=await r.json();$('hintText').textContent=d.hint};
-$('reset').onclick=start;$('again').onclick=start;start();
+$('next').onclick=()=>start(level===10?1:level+1);menu();start(1);
